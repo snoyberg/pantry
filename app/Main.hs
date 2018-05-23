@@ -4,6 +4,7 @@ module Main (main) where
 
 import Import
 import Run
+import FileBackend
 import RIO.Process
 import Options.Applicative.Simple
 import qualified Paths_pantry
@@ -19,6 +20,14 @@ main = do
                  <> short 'v'
                  <> help "Verbose output?"
                   )
+       <*> strOption
+                  ( long "root"
+                 <> help "Root directory"
+                  )
+       <*> strOption
+                  ( long "tarball"
+                 <> help "Tarball to process"
+                  )
     )
     empty
   lo <- logOptionsHandle stderr (optionsVerbose options)
@@ -28,5 +37,6 @@ main = do
           { appLogFunc = lf
           , appProcessContext = pc
           , appOptions = options
+          , appPantryBackend = filePantryBackend $ optionsRoot options
           }
      in runRIO app run
