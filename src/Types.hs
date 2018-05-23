@@ -12,6 +12,7 @@ data Options = Options
   { optionsVerbose :: !Bool
   , optionsRoot :: !FilePath
   , optionsTarball :: !FilePath
+  , optionsSqlite :: !FilePath
   }
 
 data App = App
@@ -35,6 +36,17 @@ data PantryBackend = PantryBackend
   { pbStoreBlob :: !(BlobKey -> ByteString -> IO ())
   , pbLoadBlob :: !(BlobKey -> IO (Maybe ByteString))
   }
+instance Semigroup PantryBackend where
+  pb1 <> pb2 = PantryBackend
+    { pbStoreBlob = \key bs ->
+        pbStoreBlob pb1 key bs *>
+        pbStoreBlob pb2 key bs
+    , pbLoadBlob = \key -> do
+        mbs <- pbLoadBlob pb1 key
+        case mbs of
+          Nothing -> pbLoadBlob pb2 key
+          Just _ -> pure mbs
+    }
 
 class HasPantryBackend env where
   pantryBackendL :: Lens' env PantryBackend

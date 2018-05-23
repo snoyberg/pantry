@@ -5,6 +5,7 @@ module Main (main) where
 import Import
 import Run
 import FileBackend
+import SqliteBackend
 import RIO.Process
 import Options.Applicative.Simple
 import qualified Paths_pantry
@@ -28,15 +29,20 @@ main = do
                   ( long "tarball"
                  <> help "Tarball to process"
                   )
+       <*> strOption
+                  ( long "sqlite"
+                 <> help "SQLite database"
+                  )
     )
     empty
   lo <- logOptionsHandle stderr (optionsVerbose options)
   pc <- mkDefaultProcessContext
-  withLogFunc lo $ \lf ->
+  withLogFunc lo $ \lf -> do
+    spb <- runRIO lf $ sqlitePantryBackend $ optionsSqlite options
     let app = App
           { appLogFunc = lf
           , appProcessContext = pc
           , appOptions = options
-          , appPantryBackend = filePantryBackend $ optionsRoot options
+          , appPantryBackend = filePantryBackend (optionsRoot options) <> spb
           }
-     in runRIO app run
+    runRIO app run

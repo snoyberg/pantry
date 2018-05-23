@@ -1,1 +1,6 @@
 resolver: lts-11.10
+extra-deps:
+- github: commercialhaskell/rio
+  commit: 5288bd1cb7353812d3365d7f258d188e8797bd79
+  subdirs:
+  - rio-orphans
