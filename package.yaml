@@ -1,0 +1,60 @@
+name:                pantry
+version:             0.1.0.0
+github:              snoyberg/pantry
+license:             MIT
+author:              Michael Snoyman
+maintainer:          michael@snoyman.com
+copyright:           2018 Michael Snoyman
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on Github at <https://github.com/githubuser/pantry#readme>
+
+dependencies:
+- base >= 4.10 && < 10
+- rio >= 0.1.1.0
+
+ghc-options:
+- -Wall
+- -Wcompat
+- -Wincomplete-record-updates
+- -Wincomplete-uni-patterns
+- -Wredundant-constraints
+
+library:
+  source-dirs: src
+
+executables:
+  pantry-exe:
+    main:                Main.hs
+    source-dirs:         app
+    dependencies:
+    - pantry
+    - optparse-simple
+
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+
+tests:
+  pantry-test:
+    main:                Spec.hs
+    source-dirs:         test
+    dependencies:
+    - pantry
+    - hspec
+
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
