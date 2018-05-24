@@ -15,16 +15,26 @@ import Network.HTTP.Simple
 import Conduit
 import FileTree (treeFromTarball)
 import Data.Conduit.Zlib (ungzip)
+import Control.Concurrent.STM.TBMQueue
 
 run :: RIO App ()
 run = do
   app <- ask
-  writeTarBlobs isCabal $ optionsTarball $ appOptions app
+  let count = 8
+  queue <- liftIO $ newTBMQueueIO (count * 8)
+  let schedule = atomically . writeTBMQueue queue
+      primary = writeTarBlobs (isCabal schedule) $ optionsTarball $ appOptions app
+      worker = fix $ \loop -> do
+        mnext <- atomically $ readTBMQueue queue
+        case mnext of
+          Nothing -> pure ()
+          Just next -> next *> loop
+  concurrently_ primary $ replicateConcurrently_ count worker
   where
-    isCabal fi =
+    isCabal schedule fi =
       case parseNameVersion $ filePath fi of
         Nothing -> pure False
-        Just(name, version) -> do
+        Just(name, version) -> True <$ schedule (do
           app <- ask
           let fp = appSdistRoot app </> name </> version </> concat [name, "-", version, ".tar.gz"]
               url = concat
@@ -42,8 +52,11 @@ run = do
               if getResponseStatusCode res == 200
                 then runConduit $ getResponseBody res .| sink
                 else error $ show (req, void res)
-            void $ withSourceFile fp $ \src -> runConduit $ src .| ungzip .| treeFromTarball
-          pure True
+          res <- tryAny $ void $ withSourceFile fp $ \src -> runConduit $ src .| ungzip .| treeFromTarball
+          case res of
+            Left e -> logError $ "Error making tree for tarball " <> fromString name <> "-" <> fromString version <> ": " <> displayShow e
+            Right () -> pure ()
+          )
 
     parseNameVersion :: ByteString -> Maybe (String, String)
     parseNameVersion bs1 = do

@@ -36,7 +36,7 @@ sqlitePantryBackend
   => FilePath -- ^ SQLite file
   -> RIO env PantryBackend
 sqlitePantryBackend fp = do
-  pool <- createSqlitePool (T.pack fp) 7
+  pool <- createSqlitePool (T.pack fp) 1
   runSqlPool (runMigration migrateAll) pool
   pure PantryBackend
     { pbStoreBlob = \key bs -> flip runSqlPool pool $ do

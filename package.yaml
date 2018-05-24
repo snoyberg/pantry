@@ -30,6 +30,7 @@ dependencies:
 - persistent-template
 - rio >= 0.1.1.0
 - rio-orphans
+- stm-chans
 - tar-conduit
 - word8
 
