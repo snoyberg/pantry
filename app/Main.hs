@@ -9,6 +9,8 @@ import SqliteBackend
 import RIO.Process
 import Options.Applicative.Simple
 import qualified Paths_pantry
+import RIO.Directory (getAppUserDataDirectory)
+import RIO.FilePath ((</>))
 
 main :: IO ()
 main = do
@@ -37,6 +39,7 @@ main = do
     empty
   lo <- logOptionsHandle stderr (optionsVerbose options)
   pc <- mkDefaultProcessContext
+  stackdir <- getAppUserDataDirectory "stack"
   withLogFunc lo $ \lf -> do
     spb <- runRIO lf $ sqlitePantryBackend $ optionsSqlite options
     let app = App
@@ -44,5 +47,6 @@ main = do
           , appProcessContext = pc
           , appOptions = options
           , appPantryBackend = filePantryBackend (optionsRoot options) <> spb
+          , appSdistRoot = stackdir </> "indices" </> "Hackage" </> "packages"
           }
     runRIO app run

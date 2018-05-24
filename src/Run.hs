@@ -1,15 +1,55 @@
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Run (run) where
 
 import Import
 import TarBlobWriter
 import qualified RIO.ByteString as B
+import qualified RIO.Text as T
 import Data.Conduit.Tar (filePath)
+import RIO.Directory (doesFileExist, createDirectoryIfMissing)
+import RIO.FilePath ((</>), takeDirectory)
+import Data.Word8 (_slash)
+import Network.HTTP.Simple
+import Conduit
+import FileTree (treeFromTarball)
+import Data.Conduit.Zlib (ungzip)
 
 run :: RIO App ()
 run = do
   app <- ask
   writeTarBlobs isCabal $ optionsTarball $ appOptions app
   where
-    isCabal fi = ".cabal" `B.isSuffixOf` filePath fi
+    isCabal fi =
+      case parseNameVersion $ filePath fi of
+        Nothing -> pure False
+        Just(name, version) -> do
+          app <- ask
+          let fp = appSdistRoot app </> name </> version </> concat [name, "-", version, ".tar.gz"]
+              url = concat
+                [ "https://s3.amazonaws.com/hackage.fpcomplete.com/package/"
+                , name
+                , "-"
+                , version
+                , ".tar.gz"
+                ]
+          unlessM (doesFileExist fp) $ do
+            req <- parseRequest url
+            createDirectoryIfMissing True $ takeDirectory fp
+            logInfo $ "Downloading " <> fromString name <> "-" <> fromString version
+            withSinkFileCautious fp $ \sink -> withResponse req $ \res ->
+              if getResponseStatusCode res == 200
+                then runConduit $ getResponseBody res .| sink
+                else error $ show (req, void res)
+            void $ withSourceFile fp $ \src -> runConduit $ src .| ungzip .| treeFromTarball
+          pure True
+
+    parseNameVersion :: ByteString -> Maybe (String, String)
+    parseNameVersion bs1 = do
+      bs2 <- B.stripSuffix ".cabal" bs1
+      [name1, version, name2] <- pure $ B.split _slash bs2
+      guard $ name1 == name2
+      Right name' <- Just $ decodeUtf8' name1
+      Right version' <- Just $ decodeUtf8' version
+      Just (T.unpack name', T.unpack version')

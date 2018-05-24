@@ -8,7 +8,7 @@ import qualified RIO.ByteString.Lazy as BL
 
 writeTarBlobs
   :: HasPantryBackend env
-  => (FileInfo -> Bool) -- ^ predicate
+  => (FileInfo -> RIO env Bool) -- ^ predicate
   -> FilePath -- ^ tarball
   -> RIO env ()
 writeTarBlobs predicate fp =
@@ -16,7 +16,7 @@ writeTarBlobs predicate fp =
   where
     worker fi =
       case fileType fi of
-        FTNormal -> when (predicate fi) $ do
+        FTNormal -> whenM (lift $ predicate fi) $ do
           bs <- BL.toStrict <$> sinkLazy
           void $ lift $ storeBlob bs
         _ -> pure ()

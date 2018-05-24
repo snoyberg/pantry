@@ -3,9 +3,10 @@ module Types where
 
 import RIO
 import RIO.Process
-import RIO.Orphans
+import RIO.Orphans ()
 import Crypto.Hash (Digest, SHA256)
 import qualified Crypto.Hash as Hash
+import qualified RIO.Text as T
 
 -- | Command line arguments
 data Options = Options
@@ -20,6 +21,7 @@ data App = App
   , appProcessContext :: !ProcessContext
   , appOptions :: !Options
   , appPantryBackend :: !PantryBackend
+  , appSdistRoot :: !FilePath
   }
 
 instance HasLogFunc App where
@@ -32,9 +34,33 @@ newtype BlobKey = BlobKey (Digest SHA256)
 blobKeyString :: BlobKey -> String
 blobKeyString (BlobKey digest) = show digest
 
+newtype FileTreeKey = FileTreeKey (Digest SHA256)
+
+fileTreeKeyString :: FileTreeKey -> String
+fileTreeKeyString (FileTreeKey digest) = show digest
+
+newtype SafeFilePath = SafeFilePath Text
+  deriving (Show, Eq, Ord)
+
+mkSafeFilePath :: FilePath -> Either Text SafeFilePath
+mkSafeFilePath fp =
+  let t = T.pack fp
+   in if T.any (\c -> c == '\0' || c == '\n') t
+        then Left $ T.pack $ "Invalid SafeFilePath: " ++ show t
+        else Right $ SafeFilePath t
+
+newtype FileTree = FileTree (Map SafeFilePath FileTreeEntry)
+
+data FileTreeEntry = FileTreeEntry
+  { fteExecutable :: !Bool
+  , fteBlobKey :: !BlobKey
+  }
+
 data PantryBackend = PantryBackend
   { pbStoreBlob :: !(BlobKey -> ByteString -> IO ())
   , pbLoadBlob :: !(BlobKey -> IO (Maybe ByteString))
+  , pbStoreFileTree :: !(FileTreeKey -> FileTree -> ByteString -> IO ())
+  -- FIXME load a tree too
   }
 instance Semigroup PantryBackend where
   pb1 <> pb2 = PantryBackend
@@ -46,6 +72,9 @@ instance Semigroup PantryBackend where
         case mbs of
           Nothing -> pbLoadBlob pb2 key
           Just _ -> pure mbs
+    , pbStoreFileTree = \key tree bs ->
+        pbStoreFileTree pb1 key tree bs *>
+        pbStoreFileTree pb2 key tree bs
     }
 
 class HasPantryBackend env where
