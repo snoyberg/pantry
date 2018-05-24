@@ -6,6 +6,7 @@ import Import
 import Conduit
 import Data.Conduit.Tar
 import Data.Bits ((.&.))
+import RIO.FilePath (takeDirectory, (</>))
 import qualified RIO.ByteString.Lazy as BL
 import qualified RIO.Text as T
 import qualified RIO.Map as Map
@@ -35,17 +36,25 @@ treeFromTarball
 treeFromTarball = do
   ref <- newIORef mempty
   untar (worker ref)
-  tree <- FileTree <$> readIORef ref
+  tree' <- readIORef ref
+  tree <- fmap FileTree $ forM tree' $ \e ->
+    case e of
+      Left sfp ->
+        case Map.lookup sfp tree' of
+          Nothing -> error $ "Symbolic link destination not found: " ++ show sfp ++ "\n" ++ show (Map.keys tree')
+          Just (Left _) -> error $ "We don't support multiple levels of symbolic links: " ++ show sfp
+          Just (Right fte) -> pure fte
+      Right fte -> pure fte
   key <- lift $ storeFileTree tree
   pure (key, tree)
   where
     worker ref fi = do
+      patht <- either throwIO pure $ decodeUtf8' $ filePath fi
+      path <- either (throwString . T.unpack) pure $ mkSafeFilePath $ T.unpack patht
       case fileType fi of
         FTNormal -> do
           bs <- BL.toStrict <$> sinkLazy
           let exe = fileMode fi .&. 0o100 /= 0
-          patht <- either throwIO pure $ decodeUtf8' $ filePath fi
-          path <- either (throwString . T.unpack) pure $ mkSafeFilePath $ T.unpack patht
           key <- lift $ storeBlob bs
           let fte = FileTreeEntry
                 { fteExecutable = exe
@@ -54,6 +63,13 @@ treeFromTarball = do
           modifyIORef' ref $ \m ->
             case Map.lookup path m of
               Just _ -> error $ "Path appears twice in tarball, that's just crazy: " ++ show patht
-              Nothing -> Map.insert path fte m
+              Nothing -> Map.insert path (Right fte) m
         FTDirectory -> pure ()
+        FTSymbolicLink dest -> do
+          destT <- either throwIO pure $ decodeUtf8' dest
+          destSFP <- either (throwString . T.unpack) pure $ mkSafeFilePath $ takeDirectory (T.unpack patht) </> T.unpack destT
+          modifyIORef' ref $ \m ->
+            case Map.lookup path m of
+              Just _ -> error $ "Path appears twice in tarball, that's just crazy: " ++ show patht
+              Nothing -> Map.insert path (Left destSFP) m
         _ -> error $ "Unsupported tar entry: " ++ show fi
