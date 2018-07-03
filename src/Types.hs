@@ -51,10 +51,10 @@ mkSafeFilePath fp =
 
 newtype FileTree = FileTree (Map SafeFilePath FileTreeEntry)
 
-data FileTreeEntry = FileTreeEntry
-  { fteExecutable :: !Bool
-  , fteBlobKey :: !BlobKey
-  }
+data FileTreeEntry
+  = FTEExecutable !BlobKey
+  | FTENormal !BlobKey
+  | FTELink !SafeFilePath
 
 data PantryBackend = PantryBackend
   { pbStoreBlob :: !(BlobKey -> ByteString -> IO ())

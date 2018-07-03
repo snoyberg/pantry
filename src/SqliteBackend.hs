@@ -25,8 +25,9 @@ Tree
     UniqueTreeHash hash
 TreeEntry
     tree TreeId
-    blob BlobId
     path Text
+    blob BlobId Maybe
+    linkDest Text Maybe
     executable Bool
     UniqueTreeEntry tree path
 |]
@@ -54,12 +55,23 @@ sqlitePantryBackend fp = do
         res <- insertBy $ Tree $ T.pack $ fileTreeKeyString key
         let tid = either entityKey id res
         forM_ (Map.toList m) $ \(SafeFilePath fpt, fte) -> do
-          mbid <- getBy $ UniqueBlobHash $ keyToText $ fteBlobKey fte
-          bid <-
+          (mblob, mlink, exe) <-
+            case fte of
+              FTELink (SafeFilePath link') -> pure (Nothing, Just link', False)
+              FTEExecutable key' -> pure (Just key', Nothing, True)
+              FTENormal key' -> pure (Just key', Nothing, False)
+          mbid <- forM mblob $ \blob -> do
+            mbid <- getBy $ UniqueBlobHash $ keyToText blob
             case mbid of
               Just (Entity bid _) -> pure bid
-              Nothing -> throwString $ "Blob key not found in database: " ++ blobKeyString (fteBlobKey fte)
-          void $ insertBy $ TreeEntry tid bid fpt (fteExecutable fte)
+              Nothing -> throwString $ "Blob key not found in database: " ++ blobKeyString blob
+          void $ insertBy TreeEntry
+            { treeEntryTree = tid
+            , treeEntryPath = fpt
+            , treeEntryBlob = mbid
+            , treeEntryLinkDest = mlink
+            , treeEntryExecutable = exe
+            }
     }
     where
       keyToText = T.pack . blobKeyString

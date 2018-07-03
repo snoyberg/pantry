@@ -20,8 +20,10 @@ renderFileTree (FileTree m) =
 
     go (SafeFilePath path, fte) =
       display path <> "\n" <>
-      (if fteExecutable fte then "X\n" else "\n") <>
-      fromString (blobKeyString $ fteBlobKey fte) <> "\n"
+      (case fte of
+         FTEExecutable key' -> "X\n" <> fromString (blobKeyString key') <> "\n"
+         FTENormal key' -> "N\n" <> fromString (blobKeyString key') <> "\n"
+         FTELink (SafeFilePath link') -> "L\n" <> display link' <> "\n")
 
 storeFileTree :: HasPantryBackend env => FileTree -> RIO env FileTreeKey
 storeFileTree tree = do
@@ -56,10 +58,9 @@ treeFromTarball = do
           bs <- BL.toStrict <$> sinkLazy
           let exe = fileMode fi .&. 0o100 /= 0
           key <- lift $ storeBlob bs
-          let fte = FileTreeEntry
-                { fteExecutable = exe
-                , fteBlobKey = key
-                }
+          let fte
+                | exe = FTEExecutable key
+                | otherwise = FTENormal key
           modifyIORef' ref $ \m ->
             case Map.lookup path m of
               Just _ -> error $ "Path appears twice in tarball, that's just crazy: " ++ show patht
