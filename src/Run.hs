@@ -17,19 +17,23 @@ import FileTree (treeFromTarball)
 import Data.Conduit.Zlib (ungzip)
 import Control.Concurrent.STM.TBMQueue
 
-run :: RIO App ()
-run = do
-  app <- ask
-  let count = 8
+withWorkers :: MonadUnliftIO m => Int -> ((m () -> m ()) -> m a) -> m a
+withWorkers count inner = do
   queue <- liftIO $ newTBMQueueIO (count * 8)
   let schedule = atomically . writeTBMQueue queue
-      primary = writeTarBlobs (isCabal schedule) $ optionsTarball $ appOptions app
       worker = fix $ \loop -> do
         mnext <- atomically $ readTBMQueue queue
         case mnext of
           Nothing -> pure ()
           Just next -> next *> loop
-  concurrently_ primary $ replicateConcurrently_ count worker
+  runConcurrently $
+    Concurrently (replicateConcurrently_ count worker) *>
+    Concurrently (inner schedule)
+
+run :: RIO App ()
+run = withWorkers 8 $ \schedule -> do
+  app <- ask
+  writeTarBlobs (isCabal schedule) $ optionsTarball $ appOptions app
   where
     isCabal schedule fi =
       case parseNameVersion $ filePath fi of
