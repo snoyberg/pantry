@@ -25,7 +25,9 @@ dependencies:
 - conduit >= 1.3
 - conduit-extra
 - cryptonite
+- http-client
 - http-conduit
+- memory
 - persistent
 - persistent-sqlite
 - persistent-template

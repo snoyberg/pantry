@@ -3,7 +3,6 @@ module Pantry.TarBlobWriter
   ) where
 
 import Pantry.Import
-import Conduit
 import Data.Conduit.Tar
 import qualified RIO.ByteString.Lazy as BL
 

@@ -3,8 +3,11 @@ module Pantry.Types
   , HasPantryBackend (..)
   , storeBlob
   , loadBlob
+  , loadFileTree
+  , BlobKey
   , FileTreeEntry (..)
-  , blobKeyString
+  , blobKeyText
+  , blobKeyFromText
   , FileTreeKey
   , mkFileTreeKey
   , fileTreeKeyText
@@ -21,11 +24,21 @@ import RIO.Orphans ()
 import Crypto.Hash (Digest, SHA256)
 import qualified Crypto.Hash as Hash
 import qualified RIO.Text as T
+import Data.ByteArray.Encoding
 
 newtype BlobKey = BlobKey (Digest SHA256)
 
-blobKeyString :: BlobKey -> String
-blobKeyString (BlobKey digest) = show digest
+blobKeyFromText :: Text -> Maybe BlobKey
+blobKeyFromText t =
+  case convertFromBase Base16 $ encodeUtf8 t of
+    Left _ -> Nothing
+    Right bs -> BlobKey <$> Hash.digestFromByteString (bs :: ByteString)
+
+blobKeyText :: BlobKey -> Text
+blobKeyText (BlobKey digest) = T.pack (show digest)
+
+instance Display BlobKey where
+  display = display . blobKeyText
 
 newtype FileTreeKey = FileTreeKey (Digest SHA256)
 
@@ -64,6 +77,7 @@ data PantryBackend = PantryBackend
   { pbStoreBlob :: !(BlobKey -> ByteString -> RIO PB ())
   , pbLoadBlob :: !(BlobKey -> RIO PB (Maybe ByteString))
   , pbStoreFileTree :: !(FileTreeKey -> FileTree -> ByteString -> RIO PB ())
+  , pbLoadFileTree :: !(FileTreeKey -> RIO PB (Maybe FileTree))
   -- FIXME load a tree too
   }
 instance Semigroup PantryBackend where
@@ -79,6 +93,11 @@ instance Semigroup PantryBackend where
     , pbStoreFileTree = \key tree bs ->
         pbStoreFileTree pb1 key tree bs *>
         pbStoreFileTree pb2 key tree bs
+    , pbLoadFileTree = \key -> do
+        mtree <- pbLoadFileTree pb1 key
+        case mtree of
+          Nothing -> pbLoadFileTree pb2 key
+          Just _ -> pure mtree
     }
 
 -- FIXME It may be a messy shortcut to place these superclasses here...
@@ -117,3 +136,9 @@ loadBlob
   => BlobKey
   -> RIO env (Maybe ByteString)
 loadBlob key = liftPB $ \pb -> pbLoadBlob pb key
+
+loadFileTree
+  :: HasPantryBackend env
+  => FileTreeKey
+  -> RIO env (Maybe FileTree)
+loadFileTree key = liftPB $ \pb -> pbLoadFileTree pb key

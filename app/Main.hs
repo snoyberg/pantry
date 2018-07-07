@@ -47,6 +47,24 @@ main = do
     )
     (do
         addCommand
+          "unpack-archive"
+          "Unpack a file from an archive"
+          id
+          (unpackArchive
+             <$> optional (strOption
+                  ( long "subdir"
+                 <> help "Subdirectory"
+                  ))
+             <*> strOption
+                  ( long "url"
+                 <> help "URL to download it from"
+                  )
+             <*> strOption
+                  ( long "dest"
+                 <> help "Destination directory"
+                  )
+          )
+        addCommand
           "update-hackage"
           "Download updates from Hackage"
           id
@@ -72,3 +90,9 @@ updateHackage' :: FilePath -> RIO App ()
 updateHackage' tarball = do
   stackdir <- getAppUserDataDirectory "stack"
   updateHackage tarball $ stackdir </> "indices" </> "Hackage" </> "packages"
+
+unpackArchive :: Maybe FilePath -> String -> FilePath -> RIO App ()
+unpackArchive (fromMaybe "" -> subdir) url dest = do
+  (treeKey, _tree) <- fetchArchive url subdir
+  logDebug $ "Tree key: " <> display treeKey
+  unpackTree treeKey dest

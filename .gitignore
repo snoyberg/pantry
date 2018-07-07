@@ -3,3 +3,8 @@
 *.swp
 tarballs/
 .stack-work/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+00-index.tar
+*#

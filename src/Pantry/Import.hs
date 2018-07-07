@@ -1,5 +1,6 @@
 module Pantry.Import
   ( module RIO
+  , module Conduit
   , module Pantry.Types
   , withWorkers
   , throwPantry
@@ -7,6 +8,7 @@ module Pantry.Import
   ) where
 
 import RIO
+import Conduit
 import Pantry.Types
 import Control.Concurrent.STM.TBMQueue
 

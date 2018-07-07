@@ -20,15 +20,14 @@ updateHackage
   => FilePath -- ^ 00-index (01?) tarball
   -> FilePath -- ^ sdist root
   -> RIO env ()
-updateHackage tarball sdistRoot = withWorkers 8 $ \schedule -> do
-  app <- ask
+updateHackage tarball sdistRoot =
+  withWorkers 8 $ \schedule ->
   writeTarBlobs (isCabal schedule) tarball
   where
     isCabal schedule fi =
       case parseNameVersion $ filePath fi of
         Nothing -> pure False
         Just(name, version) -> True <$ schedule (do
-          app <- ask
           let fp = sdistRoot </> name </> version </> concat [name, "-", version, ".tar.gz"]
               url = concat
                 [ "https://s3.amazonaws.com/hackage.fpcomplete.com/package/"
@@ -45,7 +44,7 @@ updateHackage tarball sdistRoot = withWorkers 8 $ \schedule -> do
               if getResponseStatusCode res == 200
                 then runConduit $ getResponseBody res .| sink
                 else error $ show (req, void res)
-          res <- tryAny $ void $ withSourceFile fp $ \src -> runConduit $ src .| ungzip .| treeFromTarball
+          res <- tryAny $ void $ withSourceFile fp $ \src -> runConduit $ src .| ungzip .| treeFromTarball Just
           case res of
             Left e -> logError $ "Error making tree for tarball " <> fromString name <> "-" <> fromString version <> ": " <> displayShow e
             Right () -> pure ()
