@@ -13,7 +13,6 @@ import RIO.FilePath ((</>))
 -- | Command line arguments
 data Options = Options
   { optionsVerbose :: !Bool
-  , optionsTarball :: !FilePath
   , optionsSqlite :: !FilePath
   }
 
@@ -32,7 +31,7 @@ instance HasPantryBackend App where
 
 main :: IO ()
 main = do
-  (options, ()) <- simpleOptions
+  (options, f) <- simpleOptions
     $(simpleVersion Paths_pantry.version)
     "Header for command line arguments"
     "Program description, also for command line arguments"
@@ -42,18 +41,24 @@ main = do
                  <> help "Verbose output?"
                   )
        <*> strOption
-                  ( long "tarball"
-                 <> help "Tarball to process"
-                  )
-       <*> strOption
                   ( long "sqlite"
                  <> help "SQLite database"
                   )
     )
-    empty
+    (do
+        addCommand
+          "update-hackage"
+          "Download updates from Hackage"
+          id
+          (updateHackage'
+             <$> strOption
+                  ( long "tarball"
+                 <> help "Tarball to process"
+                  )
+          )
+    )
   lo <- logOptionsHandle stderr (optionsVerbose options)
   pc <- mkDefaultProcessContext
-  stackdir <- getAppUserDataDirectory "stack"
   withLogFunc lo $ \lf -> do
     spb <- runRIO lf $ sqlitePantryBackend $ optionsSqlite options
     let app = App
@@ -61,6 +66,9 @@ main = do
           , appProcessContext = pc
           , appPantryBackend = spb
           }
-    runRIO app $ updateHackage
-      (optionsTarball options)
-      (stackdir </> "indices" </> "Hackage" </> "packages")
+    runRIO app f
+
+updateHackage' :: FilePath -> RIO App ()
+updateHackage' tarball = do
+  stackdir <- getAppUserDataDirectory "stack"
+  updateHackage tarball $ stackdir </> "indices" </> "Hackage" </> "packages"

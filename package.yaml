@@ -90,7 +90,7 @@ library:
   - Pantry
 
 executables:
-  pantry-exe:
+  pantry:
     main:                Main.hs
     source-dirs:         app
     dependencies:
