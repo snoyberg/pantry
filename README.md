@@ -1,5 +1,11 @@
 # pantry
 
+## Design decisions
+
+* We don't support all possible tarballs on Hackage. Some things are
+  just silly and broken. If you want to use those tarballs, you have
+  to download them as tarballs, not via pantry.
+
 ## Tables
 
 * Blobs

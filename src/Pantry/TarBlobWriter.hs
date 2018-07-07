@@ -1,7 +1,8 @@
-{-# LANGUAGE NoImplicitPrelude #-}
-module TarBlobWriter where
+module Pantry.TarBlobWriter
+  ( writeTarBlobs
+  ) where
 
-import Import
+import Pantry.Import
 import Conduit
 import Data.Conduit.Tar
 import qualified RIO.ByteString.Lazy as BL

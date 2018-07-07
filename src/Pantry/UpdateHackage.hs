@@ -1,10 +1,9 @@
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE OverloadedStrings #-}
-module Run (run) where
+module Pantry.UpdateHackage
+  ( updateHackage
+  ) where
 
-import Import
-import TarBlobWriter
+import Pantry.Import
+import Pantry.TarBlobWriter
 import qualified RIO.ByteString as B
 import qualified RIO.Text as T
 import Data.Conduit.Tar (filePath)
@@ -13,34 +12,24 @@ import RIO.FilePath ((</>), takeDirectory)
 import Data.Word8 (_slash)
 import Network.HTTP.Simple
 import Conduit
-import FileTree (treeFromTarball)
+import Pantry.FileTree (treeFromTarball)
 import Data.Conduit.Zlib (ungzip)
-import Control.Concurrent.STM.TBMQueue
 
-withWorkers :: MonadUnliftIO m => Int -> ((m () -> m ()) -> m a) -> m a
-withWorkers count inner = do
-  queue <- liftIO $ newTBMQueueIO (count * 8)
-  let schedule = atomically . writeTBMQueue queue
-      worker = fix $ \loop -> do
-        mnext <- atomically $ readTBMQueue queue
-        case mnext of
-          Nothing -> pure ()
-          Just next -> next *> loop
-  runConcurrently $
-    Concurrently (replicateConcurrently_ count worker) *>
-    Concurrently (inner schedule)
-
-run :: RIO App ()
-run = withWorkers 8 $ \schedule -> do
+updateHackage
+  :: HasPantryBackend env
+  => FilePath -- ^ 00-index (01?) tarball
+  -> FilePath -- ^ sdist root
+  -> RIO env ()
+updateHackage tarball sdistRoot = withWorkers 8 $ \schedule -> do
   app <- ask
-  writeTarBlobs (isCabal schedule) $ optionsTarball $ appOptions app
+  writeTarBlobs (isCabal schedule) tarball
   where
     isCabal schedule fi =
       case parseNameVersion $ filePath fi of
         Nothing -> pure False
         Just(name, version) -> True <$ schedule (do
           app <- ask
-          let fp = appSdistRoot app </> name </> version </> concat [name, "-", version, ".tar.gz"]
+          let fp = sdistRoot </> name </> version </> concat [name, "-", version, ".tar.gz"]
               url = concat
                 [ "https://s3.amazonaws.com/hackage.fpcomplete.com/package/"
                 , name

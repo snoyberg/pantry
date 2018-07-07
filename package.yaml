@@ -21,6 +21,7 @@ description:         Please see the README on Github at <https://github.com/gith
 
 dependencies:
 - base >= 4.10 && < 10
+- bytestring
 - conduit >= 1.3
 - conduit-extra
 - cryptonite
@@ -28,11 +29,52 @@ dependencies:
 - persistent
 - persistent-sqlite
 - persistent-template
-- rio >= 0.1.1.0
+- rio >= 0.1.3.0
 - rio-orphans
 - stm-chans
 - tar-conduit
 - word8
+
+default-extensions:
+- AutoDeriveTypeable
+- BangPatterns
+- BinaryLiterals
+- ConstraintKinds
+- DataKinds
+- DefaultSignatures
+- DeriveDataTypeable
+- DeriveFoldable
+- DeriveFunctor
+- DeriveGeneric
+- DeriveTraversable
+- DoAndIfThenElse
+- EmptyDataDecls
+- ExistentialQuantification
+- FlexibleContexts
+- FlexibleInstances
+- FunctionalDependencies
+- GADTs
+- GeneralizedNewtypeDeriving
+- InstanceSigs
+- KindSignatures
+- LambdaCase
+- MonadFailDesugaring
+- MultiParamTypeClasses
+- MultiWayIf
+- NamedFieldPuns
+- NoImplicitPrelude
+- OverloadedStrings
+- PartialTypeSignatures
+- PatternGuards
+- PolyKinds
+- RankNTypes
+- RecordWildCards
+- ScopedTypeVariables
+- StandaloneDeriving
+- TupleSections
+- TypeFamilies
+- TypeSynonymInstances
+- ViewPatterns
 
 ghc-options:
 - -Wall
@@ -43,6 +85,9 @@ ghc-options:
 
 library:
   source-dirs: src
+
+  exposed-modules:
+  - Pantry
 
 executables:
   pantry-exe:

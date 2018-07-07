@@ -2,15 +2,33 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Main (main) where
 
-import Import
-import Run
-import FileBackend
-import SqliteBackend
+import RIO
+import Pantry
 import RIO.Process
 import Options.Applicative.Simple
 import qualified Paths_pantry
 import RIO.Directory (getAppUserDataDirectory)
 import RIO.FilePath ((</>))
+
+-- | Command line arguments
+data Options = Options
+  { optionsVerbose :: !Bool
+  , optionsTarball :: !FilePath
+  , optionsSqlite :: !FilePath
+  }
+
+data App = App
+  { appLogFunc :: !LogFunc
+  , appProcessContext :: !ProcessContext
+  , appPantryBackend :: !PantryBackend
+  }
+
+instance HasLogFunc App where
+  logFuncL = lens appLogFunc (\x y -> x { appLogFunc = y })
+instance HasProcessContext App where
+  processContextL = lens appProcessContext (\x y -> x { appProcessContext = y })
+instance HasPantryBackend App where
+  pantryBackendL = lens appPantryBackend (\x y -> x { appPantryBackend = y })
 
 main :: IO ()
 main = do
@@ -22,10 +40,6 @@ main = do
        <$> switch ( long "verbose"
                  <> short 'v'
                  <> help "Verbose output?"
-                  )
-       <*> strOption
-                  ( long "root"
-                 <> help "Root directory"
                   )
        <*> strOption
                   ( long "tarball"
@@ -45,8 +59,8 @@ main = do
     let app = App
           { appLogFunc = lf
           , appProcessContext = pc
-          , appOptions = options
-          , appPantryBackend = filePantryBackend (optionsRoot options) <> spb
-          , appSdistRoot = stackdir </> "indices" </> "Hackage" </> "packages"
+          , appPantryBackend = spb
           }
-    runRIO app run
+    runRIO app $ updateHackage
+      (optionsTarball options)
+      (stackdir </> "indices" </> "Hackage" </> "packages")

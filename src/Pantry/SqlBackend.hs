@@ -1,14 +1,10 @@
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-module SqliteBackend where
+module Pantry.SqlBackend
+  ( sqlitePantryBackend
+  ) where
 
-import Import hiding (BlobKey (..))
+import Pantry.Import hiding (BlobKey (..))
 import Database.Persist
 import Database.Persist.Sqlite
 import Database.Persist.TH
@@ -32,7 +28,7 @@ TreeEntry
     UniqueTreeEntry tree path
 |]
 
-sqlitePantryBackend
+sqlitePantryBackend -- FIXME generalize to allow Postgres too
   :: HasLogFunc env
   => FilePath -- ^ SQLite file
   -> RIO env PantryBackend
@@ -52,12 +48,12 @@ sqlitePantryBackend fp = do
         flip runSqlPool pool $
         getBy $ UniqueBlobHash $ keyToText key
     , pbStoreFileTree = \key (FileTree m) _rendered -> flip runSqlPool pool $ do
-        res <- insertBy $ Tree $ T.pack $ fileTreeKeyString key
+        res <- insertBy $ Tree $ fileTreeKeyText key
         let tid = either entityKey id res
-        forM_ (Map.toList m) $ \(SafeFilePath fpt, fte) -> do
+        forM_ (Map.toList m) $ \(unSafeFilePath -> fpt, fte) -> do
           (mblob, mlink, exe) <-
             case fte of
-              FTELink (SafeFilePath link') -> pure (Nothing, Just link', False)
+              FTELink (unSafeFilePath -> link') -> pure (Nothing, Just link', False)
               FTEExecutable key' -> pure (Just key', Nothing, True)
               FTENormal key' -> pure (Just key', Nothing, False)
           mbid <- forM mblob $ \blob -> do
