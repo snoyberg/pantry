@@ -13,6 +13,7 @@ import qualified RIO.Text as T
 import Conduit
 import Pantry.Types
 import Control.Concurrent.STM.TBMQueue
+import GHC.Stack (callStack)
 
 -- | Run the given action with an accessory function which will run an
 -- action in a separate worker thread. Pre-spawn the given number of
@@ -31,12 +32,12 @@ withWorkers count inner = do
     Concurrently (replicateConcurrently_ count worker) *>
     Concurrently (inner schedule)
 
-newtype PantryException = PantryException Text
+data PantryException = PantryException !CallStack !Text
   deriving (Show, Typeable)
 instance Exception PantryException
 
-throwPantry :: MonadIO m => Utf8Builder -> m a
-throwPantry = throwIO . PantryException . utf8BuilderToText
+throwPantry :: (HasCallStack, MonadIO m) => Utf8Builder -> m a
+throwPantry = throwIO . PantryException callStack . utf8BuilderToText
 
 isRootCabalFile :: SafeFilePath -> Bool
 isRootCabalFile (unSafeFilePath -> fp) =
