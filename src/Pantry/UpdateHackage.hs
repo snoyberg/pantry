@@ -11,7 +11,6 @@ import RIO.Directory (doesFileExist, createDirectoryIfMissing)
 import RIO.FilePath ((</>), takeDirectory)
 import Data.Word8 (_slash)
 import Network.HTTP.Simple
-import Conduit
 import Pantry.FileTree (treeFromTarball)
 import Data.Conduit.Zlib (ungzip)
 

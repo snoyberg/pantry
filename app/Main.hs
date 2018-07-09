@@ -93,6 +93,10 @@ updateHackage' tarball = do
 
 unpackArchive :: Maybe FilePath -> String -> FilePath -> RIO App ()
 unpackArchive (fromMaybe "" -> subdir) url dest = do
-  (treeKey, _tree) <- fetchArchive url subdir
+  pi'@(PackageInfo treeKey cabal) <- fetchPackageSource $ PSArchive Archive
+    { archiveUrl = fromString url
+    , archiveSubdir = fromString subdir
+    }
   logDebug $ "Tree key: " <> display treeKey
-  unpackTree treeKey dest
+  logDebug $ "Cabal key: " <> display cabal
+  unpackPackage pi' dest

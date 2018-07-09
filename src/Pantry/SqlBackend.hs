@@ -26,6 +26,12 @@ TreeEntry
     linkDest Text Maybe
     executable Bool
     UniqueTreeEntry tree path
+ArchiveCache
+    url Text
+    subdir Text
+    tree TreeId
+    cabal BlobId
+    UniqueArchiveCache url subdir
 |]
 
 sqlitePantryBackend -- FIXME generalize to allow Postgres too
@@ -75,7 +81,7 @@ sqlitePantryBackend fp = do
           ents <- selectList [TreeEntryTree ==. tid] []
           entries <- forM ents $ \(Entity tekey te) -> do
             sfp <-
-              case mkSafeFilePath $ T.unpack $ treeEntryPath te of
+              case mkSafeFilePath $ treeEntryPath te of
                 Left e -> throwPantry $ "Invalid SafeFilePath in file tree " <> display key <> ": " <> display e
                 Right sfp -> pure sfp
             entry <-
@@ -84,7 +90,7 @@ sqlitePantryBackend fp = do
                   case treeEntryLinkDest te of
                     Nothing -> throwPantry $ "Can't have both null blob and link dest " <> displayShow tekey
                     Just linkdest ->
-                      case mkSafeFilePath $ T.unpack linkdest of
+                      case mkSafeFilePath linkdest of
                         Left e -> throwPantry $ "Invalid link dest: " <> display e
                         Right x -> pure $ FTELink x
                 Just blobkey -> do
@@ -104,4 +110,67 @@ sqlitePantryBackend fp = do
                       else FTENormal blobhash
             pure (sfp, entry)
           pure $ FileTree $ Map.fromList entries
+    , pbStorePackageSource = \x y -> flip runSqlPool pool (storePS x y)
+    , pbLoadPackageSource = flip runSqlPool pool . loadPS
     }
+
+storePS
+  :: PackageSource
+  -> PackageInfo
+  -> ReaderT SqlBackend (RIO env) ()
+storePS (PSArchive (Archive url subdir)) (PackageInfo tree cabal) = do
+  tree' <- entityKey <$> getBy_ (UniqueTreeHash $ fileTreeKeyText tree)
+  cabal' <- entityKey <$> getBy_ (UniqueBlobHash $ blobKeyText cabal)
+  insert_ ArchiveCache
+    { archiveCacheUrl = url
+    , archiveCacheSubdir = subdir
+    , archiveCacheTree = tree'
+    , archiveCacheCabal = cabal'
+    }
+
+loadPS
+  :: PackageSource
+  -> ReaderT SqlBackend (RIO env) (Maybe PackageInfo)
+loadPS (PSArchive (Archive url subdir)) =
+  getBy (UniqueArchiveCache url subdir) >>= traverse go
+  where
+    go (Entity _ ac) = do
+      Tree treehash <- get_ $ archiveCacheTree ac
+      treekey <-
+        case fileTreeKeyFromText treehash of
+          Nothing -> throwPantry $ "Invalid tree hash found: " <> display treehash
+          Just x -> pure x
+      cabal <- get_ $ archiveCacheCabal ac
+      cabalkey <-
+        case blobKeyFromText $ blobHash cabal of
+          Nothing -> throwPantry $ "Invalid blob hash found: " <> display (blobHash cabal)
+          Just x -> pure x
+      pure PackageInfo
+        { piTree = treekey
+        , piCabalFile = cabalkey
+        }
+
+get_
+  :: ( PersistEntityBackend val ~ SqlBackend
+     , PersistEntity val
+     )
+  => Key val
+  -> ReaderT SqlBackend (RIO env) val
+get_ key = do
+  mres <- get key
+  case mres of
+    Nothing -> throwPantry "Key lookup failed, that shouldn't happen"
+    Just res -> pure res
+
+
+getBy_
+  :: ( PersistEntityBackend val ~ SqlBackend
+     , PersistEntity val
+     )
+  => Unique val
+  -> ReaderT SqlBackend (RIO env) (Entity val)
+getBy_ uniq = do
+  mres <- getBy uniq
+  case mres of
+    Nothing -> throwPantry "Uniqueness lookup failed, that shouldn't happen"
+    Just res -> pure res

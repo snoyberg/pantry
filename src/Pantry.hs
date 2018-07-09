@@ -1,14 +1,17 @@
 module Pantry
   ( PantryBackend
   , HasPantryBackend (..)
+  , PackageSource (..)
+  , PackageInfo (..)
+  , Archive (..)
   , sqlitePantryBackend
   , updateHackage
-  , fetchArchive
-  , unpackTree
+  , fetchPackageSource
+  , unpackPackage
   ) where
 
 import Pantry.Import
 import Pantry.SqlBackend
 import Pantry.UpdateHackage
-import Pantry.Archive
+import Pantry.PackageSource
 import Pantry.Unpack

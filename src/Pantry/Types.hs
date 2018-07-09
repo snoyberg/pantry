@@ -4,6 +4,7 @@ module Pantry.Types
   , storeBlob
   , loadBlob
   , loadFileTree
+  , loadPackageSource
   , BlobKey
   , FileTreeEntry (..)
   , blobKeyText
@@ -11,14 +12,18 @@ module Pantry.Types
   , FileTreeKey
   , mkFileTreeKey
   , fileTreeKeyText
+  , fileTreeKeyFromText
   , SafeFilePath
   , mkSafeFilePath
   , unSafeFilePath
   , FileTree (..)
   , liftPB
+  , PackageSource (..)
+  , Archive (..)
+  , PackageInfo (..)
   ) where
 
-import RIO
+import RIO hiding (pi)
 import RIO.Process
 import RIO.Orphans ()
 import Crypto.Hash (Digest, SHA256)
@@ -48,6 +53,12 @@ mkFileTreeKey = FileTreeKey . Hash.hash
 fileTreeKeyText :: FileTreeKey -> Text
 fileTreeKeyText (FileTreeKey digest) = T.pack (show digest)
 
+fileTreeKeyFromText :: Text -> Maybe FileTreeKey
+fileTreeKeyFromText t =
+  case convertFromBase Base16 $ encodeUtf8 t of
+    Left _ -> Nothing
+    Right bs -> FileTreeKey <$> Hash.digestFromByteString (bs :: ByteString)
+
 instance Display FileTreeKey where
   display = display . fileTreeKeyText
 
@@ -56,12 +67,11 @@ newtype SafeFilePath = SafeFilePath Text
 instance Display SafeFilePath where
   display (SafeFilePath t) = display t
 
-mkSafeFilePath :: FilePath -> Either Text SafeFilePath
-mkSafeFilePath fp =
-  let t = T.pack fp
-   in if T.any (\c -> c == '\0' || c == '\n') t
-        then Left $ T.pack $ "Invalid SafeFilePath: " ++ show t
-        else Right $ SafeFilePath t
+mkSafeFilePath :: Text -> Either Text SafeFilePath
+mkSafeFilePath t =
+  if T.any (\c -> c == '\0' || c == '\n') t
+    then Left $ T.pack $ "Invalid SafeFilePath: " ++ show t
+    else Right $ SafeFilePath t
 
 unSafeFilePath :: SafeFilePath -> Text
 unSafeFilePath (SafeFilePath t) = t
@@ -73,12 +83,26 @@ data FileTreeEntry
   | FTENormal !BlobKey
   | FTELink !SafeFilePath
 
+data PackageSource
+  = PSArchive !Archive
+
+data Archive = Archive
+  { archiveUrl :: !Text
+  , archiveSubdir :: !Text
+  }
+
+data PackageInfo = PackageInfo
+  { piTree :: !FileTreeKey
+  , piCabalFile :: !BlobKey
+  }
+
 data PantryBackend = PantryBackend
   { pbStoreBlob :: !(BlobKey -> ByteString -> RIO PB ())
   , pbLoadBlob :: !(BlobKey -> RIO PB (Maybe ByteString))
   , pbStoreFileTree :: !(FileTreeKey -> FileTree -> ByteString -> RIO PB ())
   , pbLoadFileTree :: !(FileTreeKey -> RIO PB (Maybe FileTree))
-  -- FIXME load a tree too
+  , pbStorePackageSource :: !(PackageSource -> PackageInfo -> RIO PB ())
+  , pbLoadPackageSource :: !(PackageSource -> RIO PB (Maybe PackageInfo))
   }
 instance Semigroup PantryBackend where
   pb1 <> pb2 = PantryBackend
@@ -98,6 +122,14 @@ instance Semigroup PantryBackend where
         case mtree of
           Nothing -> pbLoadFileTree pb2 key
           Just _ -> pure mtree
+    , pbStorePackageSource = \ps pi ->
+        pbStorePackageSource pb1 ps pi *>
+        pbStorePackageSource pb2 ps pi
+    , pbLoadPackageSource = \ps -> do
+        mpi <- pbLoadPackageSource pb1 ps
+        case mpi of
+          Nothing -> pbLoadPackageSource pb2 ps
+          Just _ -> pure mpi
     }
 
 -- FIXME It may be a messy shortcut to place these superclasses here...
@@ -142,3 +174,9 @@ loadFileTree
   => FileTreeKey
   -> RIO env (Maybe FileTree)
 loadFileTree key = liftPB $ \pb -> pbLoadFileTree pb key
+
+loadPackageSource
+  :: HasPantryBackend env
+  => PackageSource
+  -> RIO env (Maybe PackageInfo)
+loadPackageSource key = liftPB $ \pb -> pbLoadPackageSource pb key

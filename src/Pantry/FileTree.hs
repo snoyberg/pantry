@@ -1,9 +1,9 @@
 module Pantry.FileTree
   ( treeFromTarball
+  , storeFileTree
   ) where
 
 import Pantry.Import
-import Conduit
 import Data.Conduit.Tar
 import Data.Bits ((.&.))
 import RIO.FilePath (takeDirectory, (</>))
@@ -35,15 +35,16 @@ storeFileTree tree = liftPB $ \pb -> do
   let (key, bs) = renderFileTree tree
    in key <$ pbStoreFileTree pb key tree bs
 
+-- | Does not write it to the database!
 treeFromTarball
   :: HasPantryBackend env
-  => (Text -> Maybe Text) -- ^ modify filepath
-  -> ConduitM ByteString o (RIO env) (FileTreeKey, FileTree)
+  => (Text -> Maybe Text) -- ^ modify filepath FIXME remove, no longer needed
+  -> ConduitM ByteString o (RIO env) FileTree
 treeFromTarball modFilePath = do
   ref <- newIORef mempty
   untar (worker ref)
   tree' <- readIORef ref
-  tree <- fmap FileTree $ forM tree' $ \e ->
+  fmap FileTree $ forM tree' $ \e ->
     case e of
       Left sfp ->
         case Map.lookup sfp tree' of
@@ -52,13 +53,11 @@ treeFromTarball modFilePath = do
           Just (Left _) -> throwPantry $ "We don't support multiple levels of symbolic links: " <> displayShow sfp
           Just (Right fte) -> pure fte
       Right fte -> pure fte
-  key <- lift $ storeFileTree tree
-  pure (key, tree)
   where
     worker ref fi = do
       patht <- either throwIO pure $ decodeUtf8' $ filePath fi
       forM_ (modFilePath patht) $ \patht' -> do
-        path <- either (throwString . T.unpack) pure $ mkSafeFilePath $ T.unpack $ T.dropPrefix "/" patht'
+        path <- either (throwString . T.unpack) pure $ mkSafeFilePath $ T.dropPrefix "/" patht'
         case fileType fi of
           FTNormal -> do
             bs <- BL.toStrict <$> sinkLazy
@@ -81,7 +80,7 @@ treeFromTarball modFilePath = do
           FTDirectory -> pure ()
           FTSymbolicLink dest -> do
             destT <- either throwIO pure $ decodeUtf8' dest
-            destSFP <- either (throwString . T.unpack) pure $ mkSafeFilePath $ takeDirectory (T.unpack patht) </> T.unpack destT
+            destSFP <- either (throwString . T.unpack) pure $ mkSafeFilePath $ T.pack $ takeDirectory (T.unpack patht) </> T.unpack destT
             m <- readIORef ref
             case Map.lookup path m of
               Just _ -> throwPantry $ "Path appears twice in tarball, that's just crazy: " <> displayShow patht

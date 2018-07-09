@@ -54,3 +54,9 @@
 ## CLI
 
 * Unpack (same as unpack API)
+
+```
+pantry --sqlite pantry.sqlite3 unpack-archive --url https://hackage.haskell.org/package/yesod-core-1.6.6/yesod-core-1.6.6.tar.gz --dest yesod-core-1.6.6
+pantry --sqlite pantry.sqlite3 unpack-archive --url https://github.com/snoyberg/yaml/archive/yaml-0.8.32.tar.gz --dest yaml-0.8.32
+pantry --sqlite pantry.sqlite3 unpack-archive --url https://github.com/yesodweb/yesod/archive/yesod-bin-1.6.0.3.tar.gz --subdir yesod-bin --dest yesod-bin-1.6.0.3
+```

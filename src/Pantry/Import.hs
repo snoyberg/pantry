@@ -4,10 +4,12 @@ module Pantry.Import
   , module Pantry.Types
   , withWorkers
   , throwPantry
+  , isRootCabalFile
   , PantryException (..)
   ) where
 
 import RIO
+import qualified RIO.Text as T
 import Conduit
 import Pantry.Types
 import Control.Concurrent.STM.TBMQueue
@@ -35,3 +37,8 @@ instance Exception PantryException
 
 throwPantry :: MonadIO m => Utf8Builder -> m a
 throwPantry = throwIO . PantryException . utf8BuilderToText
+
+isRootCabalFile :: SafeFilePath -> Bool
+isRootCabalFile (unSafeFilePath -> fp) =
+  ".cabal" `T.isSuffixOf` fp &&
+  T.all (/= '/') fp

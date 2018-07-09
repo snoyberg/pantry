@@ -1,5 +1,6 @@
 module Pantry.Unpack
   ( unpackTree
+  , unpackPackage
   ) where
 
 import Pantry.Import
@@ -8,17 +9,29 @@ import RIO.Directory
 import RIO.FilePath
 import qualified RIO.Text as T
 
-unpackTree
+unpackPackage
   :: HasPantryBackend env
-  => FileTreeKey -- ^ tree to unpack
+  => PackageInfo
   -> FilePath -- ^ dest directory
   -> RIO env ()
-unpackTree key dest = do
-  mtree <- loadFileTree key
+unpackPackage pi' dest = do
+  mtree <- loadFileTree $ piTree pi'
   FileTree tree <-
     case mtree of
       Just tree -> pure tree
-      Nothing -> throwPantry $ "Tried to unpack unknown tree " <> display key
+      Nothing -> throwPantry $ "Tried to unpack unknown tree " <> display (piTree pi')
+  let tree' = FileTree $ flip Map.mapWithKey tree $ \sfp fte ->
+                if isRootCabalFile sfp
+                  then FTENormal (piCabalFile pi')
+                  else fte
+  unpackTree tree' dest
+
+unpackTree
+  :: HasPantryBackend env
+  => FileTree -- ^ tree to unpack
+  -> FilePath -- ^ dest directory
+  -> RIO env ()
+unpackTree (FileTree tree) dest =
   forM_ (Map.toList tree) $ \(fp, treeEntry) -> do
     let destfp = dest </> T.unpack (unSafeFilePath fp)
     case treeEntry of
