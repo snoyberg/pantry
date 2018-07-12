@@ -214,3 +214,30 @@ to minimize disruption are important. Here's a sketch:
 * Release a new version of Stack with support for old and new snapshot formats
 * Wait for users to upgrade (2 weeks?), and switch over to new Stackage tool
 * Optional: convert all existing Stackage snapshots to the new format
+
+## More advanced content discovery
+
+There are three more advanced cases to consider:
+
+* Providing fall-back locations for content, such as out of concern for a
+  single URL being removed in the future
+* Closed corporate setups, where access to the general internet may either be
+  impossible or undesirable
+* Automatic discovery of missing content by hash
+
+The following extensions are possible to address these cases:
+
+* Instead of a single package location, provide a list of package locations
+  with fallback semantics.
+* Corporate environments will be encouraged to run a local Pantry mirror, and
+  configure clients like Stack to speak to these mirrors instead of the default
+  ones (or in addition to).
+* Provide some kind of federation protocol for Pantry where servers can
+  registry with each other and requests for content can be pinged to each
+  other.
+
+Providing override at the client level for Pantry mirror locations is a
+__MUST__. Making it easy to run in a corporate environment is a __SHOULD__.
+Providing the fallback package locations seems easy enough that we should
+include it initially, but falls under a __SHOULD__. The federated protocol
+should be added on-demand.
