@@ -6,6 +6,14 @@ Tying together:
 * Stackage
 * Stack
 
+## What is Pantry
+
+* A Haskell library, command line executable, storage specification, and
+  network protocol
+* Intended for content-addressable storage of Haskell packages
+* Allows non-centralized package storage
+* Primarily for use by Stackage and Stack, hopefully other tools as well
+
 ## Goals
 
 * Efficient, distributed package storage for Haskell
@@ -214,6 +222,47 @@ to minimize disruption are important. Here's a sketch:
 * Release a new version of Stack with support for old and new snapshot formats
 * Wait for users to upgrade (2 weeks?), and switch over to new Stackage tool
 * Optional: convert all existing Stackage snapshots to the new format
+
+## Example: resolving a package location
+
+To work through a full example, the following three stanzas are intended to
+have equivalent behavior:
+
+```yaml
+- archive: https://example.com/foobar-1.2.3.4.tar.gz
+
+- name: foobar
+  version: 1.2.3.4
+  pantry: deadbeef # tree key
+  cabal-file: 12345678 # blob key
+  archive: https://example.com/foobar-1.2.3.4.tar.gz
+
+- pantry: deadbeef
+
+```
+
+The question is: how does the first one (presumably what a user would want to
+enter) be resolved into the second and third? Pantry would follow this set of
+steps:
+
+* Download the tarball from the given URL
+* Place each file in the tarball into its store as a blob, getting a blob key
+  for each. The tarball is now represented as `Map FilePath BlobKey`
+* Perform the root directory stripping step, removing a shared path
+* Since there's no subdirectory: no subdirectory stripping would be performed
+* Serialize the `Map FilePath BlobKey` to a binary format and take its hash to
+  get a tree key
+* Store the tree in the store referenced by its tree key. In our example: the
+  tree key is `deadbeef`.
+* Ensure that the tree is a valid package by checking for a single cabal file
+  at the root. In our example, that's found in `foobar.cabal` with blob key
+  `12345678`.
+* Parse the cabal file and ensure that it is a valid cabal file, and that its
+  package name is `foobar`. Grab the version number (1.2.3.4).
+* We now know that tree key `deadbeef` is a valid package, and can refer to it
+  by tree key exclusively. However, including the other information allows us
+  to verify our assumptions, provide user-friendly readable data, and provide a
+  fallback if the package isn't in the Pantry cache.
 
 ## More advanced content discovery
 
