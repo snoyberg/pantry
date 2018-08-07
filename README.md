@@ -1,5 +1,7 @@
 # pantry
 
+__WARNING__ This repo is not being developed. It's kept for the `PLANS.md` file. Work is going directly on the stack repo: https://github.com/commercialhaskell/stack/projects/2
+
 ## Design decisions
 
 * We don't support all possible tarballs on Hackage. Some things are
