@@ -1,5 +1,7 @@
 # Pantry plans
 
+Tracked in a Stack project: https://github.com/commercialhaskell/stack/projects/2
+
 Tying together:
 
 * pantry
